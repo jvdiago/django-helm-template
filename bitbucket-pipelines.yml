@@ -1,0 +1,23 @@
+definitions:
+  stepCreateHelmChart: &stepCreateHelmChart
+    step:
+      image: atlassian/default-image:2
+      name: CreateHelmChart
+      script:
+        - curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | tee /usr/share/keyrings/helm.gpg > /dev/null
+        - apt-get update
+        - apt-get install apt-transport-https --yes
+        - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list
+        - apt-get update
+        - apt-get install helm
+        - helm plugin install https://github.com/chartmuseum/helm-push
+        - helm package . -d charts;
+        - helm repo add django  ${HELM_REPO_URL} --username ${CI_JOB_USER} --password ${CI_JOB_TOKEN}
+        - for i in `ls -1 charts/*.tgz`; do helm cm-push $i django; done
+      artifacts:
+        - charts/**
+
+pipelines:
+  branches:
+    master:
+      - <<: *stepCreateHelmChart

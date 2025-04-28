@@ -1,0 +1,18 @@
+{{- if .Values.static.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{.Release.Name}}-static-content
+  labels:
+    {{- include "django-helm.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.djangoServer.service.type }}
+  ports:
+    - port: 80
+      targetPort: static-content
+      protocol: TCP
+      name: static-content
+  selector:
+    {{- include "django-helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: django-server
+{{- end }}

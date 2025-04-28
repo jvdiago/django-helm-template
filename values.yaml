@@ -1,0 +1,262 @@
+image:
+  # image config
+  repository: dockerhub/test/django
+  tag: latest
+  pullPolicy: Always
+  imagePullSecrets: []
+
+configmap:
+  # django environment. Add/replace as you see fit
+  data:
+    DJANGO_SETTINGS_MODULE: config.settings.production
+    ELASTIC_APM_SERVICE_SERVER_URL: https://apm.elastic.co
+    ELASTIC_APM_SERVICE_ENABLED: False
+    DJANGO_ALLOWED_HOSTS: "*"
+    CELERY_BROKER_URL: redis://redis:6379/0
+    POSTGRES_DB: postgres
+    POSTGRES_USER: postgres
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: 5432
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+    DEBUG: False
+
+global:
+  # main Django module where Django settings are stored 
+  appName: &appNameDjango "myapp" 
+  staticPath: /app/static
+  mediaPath: /app/media
+  env:
+    - name: DJANGO_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: django-server-secret
+          key: secret-key
+    - name: ELASTIC_APM_SECRET_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: django-server-secret
+          key: elastic_apm_secret_token
+    - name: POSTGRES_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: django-server-secret
+          key: postgres-password
+pvc:
+  # If true a pvc will be created to store media files
+  create: false
+  size: 5Gi
+  accessModes: ReadWriteMany
+  storageClassName: default
+
+# volumemMounts and volumes are both mounted in the django and celery worker container
+volumeMounts:
+  # - mountPath: "/app/secret1"
+  #   name: ssh-key
+  #   readOnly: true
+
+volumes:
+  # - name: ssh-key
+  #   secret:
+  #     secretName: ssh-key
+
+static:
+  # If true a nginx container will be added to the pod to serve statics
+  enabled: false
+  containerPort: 80
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  created: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:
+
+djangoServer:
+  replicaCount: 1
+  containerPort: 8080
+
+  env:
+    - name: DJANGO_TYPE
+      value: DJANGO_WEB
+
+  podSecurityContext: {}
+  # fsGroup: 2000
+
+  securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+  hpa:
+    enabled: false
+
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      nginx.ingress.kubernetes.io/enable-cors: "true"
+      nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+      nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    hosts:
+      - host: chart-example.local
+        paths:
+          - /
+    tls: []
+    #  - secretName: chart-example-tls
+    #    hosts:
+    #      - chart-example.local
+
+  resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+  nodeSelector: {}
+
+  tolerations: []
+
+  affinity: {}
+
+  probe:
+    enabled: true
+    readiness:
+      path: /
+      initialDelaySeconds: 15
+      periodSeconds: 10
+    liveness:
+      path: /
+      failureThreshold: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+
+celeryBeat:
+  enabled: false
+
+  env:
+    - name: DJANGO_TYPE
+      value: DJANGO_CELERY_BEAT
+
+  command: ["celery", "beat", "-A", *appNameDjango, "-l", "info"]
+
+  podSecurityContext: {}
+
+  securityContext: {}
+
+  resources: {}
+
+  nodeSelector: {}
+
+  tolerations: []
+
+  affinity: {}
+
+celeryWorker:
+  enabled: false
+
+  env:
+    - name: DJANGO_TYPE
+      value: DJANGO_CELERY_WORKER
+
+  queue:
+    # This is a list that supports multiple queues
+    - name: celery
+      replicaCount: 1
+      command: ["celery", "worker", "-A", *appNameDjango, "-l", "info", "-Q", "celery"]
+      podSecurityContext: {}
+      securityContext: {}
+      resources: {}
+      nodeSelector: {}
+      tolerations: []
+      affinity: {}
+      probe:
+        enabled: false
+        application: *appNameDjango
+        initialDelaySeconds: 15
+        periodSeconds: 10
+        timeoutSeconds: 10
+        failureThreshold: 3
+
+celerFlower:
+  enabled: false
+
+  command: ["celery", "flower", "-A", *appNameDjango, "--address=0.0.0.0", "--port=5555"]
+
+  service:
+    type: ClusterIP
+    port: 5555
+
+  ingress:
+    enabled: false
+    annotations: {}
+    hosts:
+      - host: chart-example.local
+        paths: []
+    tls: []
+
+  podSecurityContext: {}
+
+  securityContext: {}
+
+  resources: {}
+
+  nodeSelector: {}
+
+  tolerations: []
+
+  affinity: {}
+
+grpcServer:
+  enabled: false
+  replicaCount: 1
+
+  command: ["python", "manage.py", "grpcrunserver", "8001"]
+
+  podSecurityContext: {}
+
+  securityContext: {}
+
+  service:
+    type: ClusterIP
+    port: 8001
+
+  hpa:
+    enabled: false
+
+  ingress:
+    enabled: false
+    annotations: {}
+    hosts:
+      - host: chart-example.local
+        paths: []
+    tls: []
+
+  resources: {}
+
+  nodeSelector: {}
+
+  tolerations: []
+
+  affinity: {}
+
+collectstaticJob:
+  enabled: false
+
+migrateJob:
+  enabled: false

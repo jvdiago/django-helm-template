@@ -1,0 +1,124 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{.Release.Name}}-django-server
+  labels:
+    {{- include "django-helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: django-server
+spec:
+  replicas: {{ .Values.djangoServer.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "django-helm.labels" . | nindent 6 }}
+      app.kubernetes.io/component: django-server
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "django-helm.labels" . | nindent 8 }}
+        app.kubernetes.io/component: django-server
+      annotations:
+        checksum/config: {{include (print $.Template.BasePath "/django-core/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.image.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.djangoServer.podSecurityContext | nindent 8 }}
+      volumes:
+        {{- if .Values.pvc.create }}
+        - name: django-server-pvc
+          persistentVolumeClaim:
+            claimName: django-server-pvc
+        {{- end }}
+        - name: static-content
+          emptyDir: { }
+{{- with .Values.volumes }}
+{{- toYaml . | nindent 8 }}
+{{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          volumeMounts:
+            {{- if .Values.pvc.create }}
+            - mountPath: "{{.Values.global.mediaPath}}"
+              name: django-server-pvc
+            {{- end }}   
+            - mountPath: "{{.Values.global.staticPath}}"
+              name: static-content
+{{- with .Values.volumeMounts }}
+{{- toYaml . | nindent 12 }}
+{{- end }}
+          securityContext:
+            {{- toYaml .Values.djangoServer.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.djangoServer.probe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.djangoServer.probe.readiness.path }}
+              port: django
+
+            initialDelaySeconds: {{ .Values.djangoServer.probe.readiness.initialDelaySeconds | default 15}}
+            periodSeconds: {{ .Values.djangoServer.probe.readiness.periodSeconds | default 10 }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.djangoServer.probe.liveness.path }}
+              port: django
+            failureThreshold: {{ .Values.djangoServer.probe.liveness.failureThreshold | default 10 }}
+            periodSeconds: {{ .Values.djangoServer.probe.liveness.periodSeconds | default 10 }}
+            timeoutSeconds: {{ .Values.djangoServer.probe.liveness.timeoutSeconds | default 5 }}
+          {{- end }}
+          {{- with .Values.djangoServer.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: logs_{{.Release.Name}}-django-server
+              value: stdout
+{{- with .Values.global.env }}
+{{- toYaml . | nindent 12 }}
+{{- end }}
+{{- with .Values.djangoServer.env }}
+{{- toYaml . | nindent 12 }}
+{{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{.Release.Name}}-config
+          ports: 
+            - name: django
+              containerPort: {{ .Values.djangoServer.containerPort }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.djangoServer.resources | nindent 12 }}
+        {{- if .Values.static.enabled }}
+        - image: nginx
+          imagePullPolicy: Always
+          name: static-content
+          ports:
+            - containerPort: {{ .Values.static.containerPort }}
+              name: static-content
+              protocol: TCP
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /usr/share/nginx/html/static
+              name: static-content
+        {{- end }}
+      {{- with .Values.djangoServer.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.djangoServer.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.djangoServer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

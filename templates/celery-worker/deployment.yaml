@@ -1,0 +1,115 @@
+{{- if .Values.celeryWorker.enabled -}}
+  {{- range .Values.celeryWorker.queue -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{$.Release.Name}}-celery-work-{{.name}}
+  labels:
+    {{- include "django-helm.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{$.Release.Name}}-celery-work-{{.name}}
+spec:
+  replicas: {{ .replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "django-helm.labels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{$.Release.Name}}-celery-work-{{.name}}
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "django-helm.labels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{$.Release.Name}}-celery-work-{{.name}}
+      annotations:
+        checksum/config: {{include (print $.Template.BasePath "/django-core/configmap.yaml") $ | sha256sum }}
+    spec:
+      {{- with $.Values.image.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .podSecurityContext | nindent 8 }}
+      volumes:
+        {{- if $.Values.pvc.create }}
+        {{- if eq $.Values.pvc.accessModes "ReadWriteMany" }}
+        - name: django-server-pvc
+          persistentVolumeClaim:
+            claimName: django-server-pvc
+        {{- end }}
+        {{- end }}
+{{- with $.Values.volumes }}
+{{- toYaml . | nindent 8 }}
+{{- end }}
+      containers:
+        - name: {{ $.Chart.Name }}
+          volumeMounts:
+            {{- if $.Values.pvc.create }}
+            {{- if eq $.Values.pvc.accessModes "ReadWriteMany" }}
+            - mountPath: "{{$.Values.global.mediaPath}}"
+              name: django-server-pvc
+            {{- end }}
+            {{- end }}
+{{- with $.Values.volumeMounts }}
+{{- toYaml . | nindent 12 }}
+{{- end }}
+          securityContext:
+            {{- toYaml .securityContext | nindent 12 }}
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          {{- with .command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{$.Release.Name}}-config
+          env:
+            - name: logs_{{$.Release.Name}}-celery-work-{{.name}}
+              value: stdout
+          {{- with $.Values.global.env }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $.Values.celeryWorker.env }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          {{- if .probe.enabled }}
+          readinessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - "celery {{ (ne .probe.application "") |ternary (printf "-A %s" .probe.application) "" }} status -d celery@$(hostname)"
+            initialDelaySeconds: {{ .probe.initialDelaySeconds }}
+            periodSeconds: {{ .probe.periodSeconds }}
+            timeoutSeconds: {{ .probe.timeoutSeconds }}
+          livenessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - "celery {{ (ne .probe.application "") |ternary (printf "-A %s" .probe.application) "" }} status -d celery@$(hostname)"
+            initialDelaySeconds: {{ .probe.initialDelaySeconds }}
+            periodSeconds: {{ .probe.periodSeconds }}
+            timeoutSeconds: {{ .probe.timeoutSeconds }}
+            failureThreshold: {{ .probe.failureThreshold }}
+          {{- end }}
+      {{- with .nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+{{- end -}}
+  {{- end -}}
