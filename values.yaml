@@ -12,12 +12,12 @@ configmap:
     ELASTIC_APM_SERVICE_SERVER_URL: https://apm.elastic.co
     ELASTIC_APM_SERVICE_ENABLED: False
     DJANGO_ALLOWED_HOSTS: "*"
-    CELERY_BROKER_URL: redis://redis:6379/0
-    POSTGRES_DB: postgres
+    CELERY_BROKER_URL: redis://valkey-primary:6379/0
+    POSTGRES_DB: django
     POSTGRES_USER: postgres
     POSTGRES_HOST: postgres
     POSTGRES_PORT: 5432
-    REDIS_HOST: redis
+    REDIS_HOST: valkey-primary
     REDIS_PORT: 6379
     DEBUG: False
 
@@ -153,7 +153,7 @@ celeryBeat:
     - name: DJANGO_TYPE
       value: DJANGO_CELERY_BEAT
 
-  command: ["celery", "beat", "-A", *appNameDjango, "-l", "info"]
+  command: ["celery", "-A", *appNameDjango, "beat", "--loglevel=INFO", "-S", "django"]
 
   podSecurityContext: {}
 
@@ -178,7 +178,7 @@ celeryWorker:
     # This is a list that supports multiple queues
     - name: celery
       replicaCount: 1
-      command: ["celery", "worker", "-A", *appNameDjango, "-l", "info", "-Q", "celery"]
+      command: ["celery", "-A", *appNameDjango, "worker", "--loglevel=INFO", "--concurrency=5", "-E"]
       podSecurityContext: {}
       securityContext: {}
       resources: {}

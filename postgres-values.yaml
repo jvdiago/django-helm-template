@@ -1,0 +1,24 @@
+image:
+  tag: 16.2.0  # Ensure you're using the correct version tag for PostgreSQL 16
+
+auth:
+  username: django
+  password: postgres
+  database: django
+
+primary:
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""  # Leave empty to use the default StorageClass
+
+service:
+  type: ClusterIP  # Or change to LoadBalancer/NodePort if external access is needed
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 250m
+  limits:
+    memory: 512Mi
+    cpu: 500m
