@@ -33,6 +33,11 @@ kubectl -n sample-django create secret generic django-server-secret --from-liter
 helm install my-release django/django -f values.yaml
 ```
 
+## Install locally (for testing purposes)
+```bash
+helm install django --namespace sample-django . -f values.yaml
+```
+
 ## Configuration
 django-helm includes
 

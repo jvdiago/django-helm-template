@@ -1,6 +1,6 @@
 image:
   # image config
-  repository: dockerhub/test/django
+  repository: jvela/sample-django
   tag: latest
   pullPolicy: Always
   imagePullSecrets: []
@@ -8,9 +8,7 @@ image:
 configmap:
   # django environment. Add/replace as you see fit
   data:
-    DJANGO_SETTINGS_MODULE: config.settings.production
-    ELASTIC_APM_SERVICE_SERVER_URL: https://apm.elastic.co
-    ELASTIC_APM_SERVICE_ENABLED: False
+    DJANGO_SETTINGS_MODULE: sample_project.settings.prod
     DJANGO_ALLOWED_HOSTS: "*"
     CELERY_BROKER_URL: redis://valkey-primary:6379/0
     POSTGRES_DB: django
@@ -22,8 +20,8 @@ configmap:
     DEBUG: False
 
 global:
-  # main Django module where Django settings are stored 
-  appName: &appNameDjango "myapp" 
+  # main Django module where Django settings are stored
+  appName: &appNameDjango "myapp"
   staticPath: /app/static
   mediaPath: /app/media
   env:
@@ -32,15 +30,10 @@ global:
         secretKeyRef:
           name: django-server-secret
           key: secret-key
-    - name: ELASTIC_APM_SECRET_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: django-server-secret
-          key: elastic_apm_secret_token
     - name: POSTGRES_PASSWORD
       valueFrom:
         secretKeyRef:
-          name: django-server-secret
+          name: my-postgres-postgresql
           key: postgres-password
 pvc:
   # If true a pvc will be created to store media files
