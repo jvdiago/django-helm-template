@@ -13,7 +13,7 @@ configmap:
     CELERY_BROKER_URL: redis://valkey-primary:6379/0
     POSTGRES_DB: django
     POSTGRES_USER: postgres
-    POSTGRES_HOST: postgres
+    POSTGRES_HOST: my-postgres-postgresql
     POSTGRES_PORT: 5432
     REDIS_HOST: valkey-primary
     REDIS_PORT: 6379
