@@ -229,9 +229,6 @@ grpcServer:
     type: ClusterIP
     port: 8001
 
-  hpa:
-    enabled: false
-
   ingress:
     enabled: false
     annotations: {}
